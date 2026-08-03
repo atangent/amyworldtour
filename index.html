@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>amy world tour</title>
+<meta name="description" content="Notes from a very specific life.">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@1,300&display=swap" rel="stylesheet">
+
+<style>
+:root{
+  --bg-1:#fbfbfc;
+  --bg-2:#f2f4f6;
+  --ink:#31363c;
+  --ink-soft:#858d96;
+  --wash:radial-gradient(120% 90% at 50% 0%, var(--bg-1) 0%, var(--bg-2) 100%);
+}
+
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+
+body{
+  background:var(--wash);
+  color:var(--ink);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+  overflow:hidden;
+  display:grid;
+  place-items:center;
+  min-height:100svh;
+}
+
+/* ---------- bubbles ---------- */
+
+/* position:fixed makes this a stacking context, which isolates the blend
+   group — so the wash has to be painted HERE, not just on body, or the
+   sprites' white backgrounds have nothing to multiply against. */
+.field{
+  position:fixed;
+  inset:0;
+  overflow:hidden;
+  z-index:0;
+  background:var(--wash);
+  --mx:0;
+  --my:0;
+}
+
+/* wrapper owns parallax; .sprite owns drift + wobble. Two elements so the
+   two motions never contend for the same `translate`. Blend lives out here
+   because the wrapper's own translate would otherwise isolate the sprite. */
+.bubble{
+  position:absolute;
+  left:var(--x);
+  top:var(--y);
+  width:var(--size);
+  /* white background of the sprite disappears against the light page */
+  mix-blend-mode:multiply;
+  translate:calc(var(--mx) * var(--par) * -1px) calc(var(--my) * var(--par) * -1px);
+  will-change:translate;
+}
+
+.sprite{
+  display:block;
+  width:100%;
+  height:auto;
+  animation:
+    drift var(--dur) ease-in-out infinite alternate,
+    wobble var(--wob) ease-in-out infinite alternate;
+  animation-delay:var(--delay), calc(var(--delay) * -0.7);
+  will-change:translate, scale;
+}
+
+/* only the three biggest get the slow colour shift — cheap, and enough */
+.shimmer{animation:
+    drift var(--dur) ease-in-out infinite alternate,
+    wobble var(--wob) ease-in-out infinite alternate,
+    shift 72s ease-in-out infinite;
+}
+
+@keyframes drift{
+  from{translate:0 0}
+  to  {translate:var(--dx) var(--dy)}
+}
+@keyframes wobble{
+  0%  {scale:1.015 .985}
+  50% {scale:.99 1.01}
+  100%{scale:1.012 .988}
+}
+@keyframes shift{
+  0%,100%{filter:hue-rotate(0deg)}
+  50%    {filter:hue-rotate(-26deg)}
+}
+
+/* ---------- content ---------- */
+
+main{position:relative;z-index:1;text-align:center;padding:2rem 1.5rem}
+
+h1{
+  font-family:"Cormorant Garamond",Georgia,serif;
+  font-style:italic;
+  font-weight:300;
+  font-size:clamp(3rem,11vw,7.5rem);
+  line-height:.95;
+  letter-spacing:-.015em;
+}
+
+.tagline{
+  margin-top:1.4rem;
+  font-size:.78rem;
+  letter-spacing:.18em;
+  text-transform:uppercase;
+  color:var(--ink-soft);
+}
+
+nav{margin-top:3.2rem;display:flex;flex-wrap:wrap;justify-content:center;gap:.4rem 2rem}
+
+nav a{
+  color:var(--ink);
+  text-decoration:none;
+  font-size:.76rem;
+  letter-spacing:.15em;
+  text-transform:uppercase;
+  padding:.4rem 0;
+  border-bottom:1px solid transparent;
+  transition:border-color .35s ease;
+}
+nav a:hover,nav a:focus-visible{border-bottom-color:var(--ink)}
+a:focus-visible{outline:2px solid #b9c9e6;outline-offset:6px;border-radius:2px}
+
+@media (prefers-reduced-motion: reduce){
+  .sprite{animation:none}
+  .bubble{translate:none}
+}
+</style>
+</head>
+<body>
+
+<div class="field" aria-hidden="true">
+  <div class="bubble" style="--size:min(36vmin,320px); --x:4%;  --y:10%; --dx:5vw;  --dy:7vh;  --dur:28s; --wob:9s;  --delay:0s;   --par:10">
+    <img class="sprite shimmer" src="bubbles/b.webp" alt="" decoding="async">
+  </div>
+
+  <div class="bubble" style="--size:min(25vmin,220px); --x:72%; --y:5%;  --dx:-4vw; --dy:9vh;  --dur:33s; --wob:11s; --delay:-7s;  --par:15">
+    <img class="sprite" src="bubbles/d.webp" alt="" decoding="async">
+  </div>
+
+  <div class="bubble" style="--size:min(10vmin,88px);  --x:56%; --y:27%; --dx:6vw;  --dy:-5vh; --dur:20s; --wob:7s;  --delay:-3s;  --par:21">
+    <img class="sprite" src="bubbles/e.webp" alt="" decoding="async">
+  </div>
+
+  <div class="bubble" style="--size:min(40vmin,360px); --x:60%; --y:50%; --dx:-6vw; --dy:-8vh; --dur:37s; --wob:13s; --delay:-13s; --par:8">
+    <img class="sprite shimmer" src="bubbles/a.webp" alt="" decoding="async">
+  </div>
+
+  <div class="bubble" style="--size:min(14vmin,124px); --x:87%; --y:57%; --dx:-5vw; --dy:6vh;  --dur:24s; --wob:8s;  --delay:-9s;  --par:19">
+    <img class="sprite" src="bubbles/f.webp" alt="" decoding="async">
+  </div>
+
+  <div class="bubble" style="--size:min(28vmin,250px); --x:2%;  --y:62%; --dx:7vw;  --dy:-6vh; --dur:31s; --wob:12s; --delay:-17s; --par:13">
+    <img class="sprite shimmer" src="bubbles/c.webp" alt="" decoding="async">
+  </div>
+
+  <div class="bubble" style="--size:min(8vmin,70px);   --x:28%; --y:85%; --dx:9vw;  --dy:-12vh;--dur:22s; --wob:6s;  --delay:-2s;  --par:22">
+    <img class="sprite" src="bubbles/e.webp" alt="" decoding="async">
+  </div>
+
+  <div class="bubble" style="--size:min(11vmin,95px);  --x:41%; --y:3%;  --dx:-7vw; --dy:8vh;  --dur:26s; --wob:9s;  --delay:-11s; --par:21">
+    <img class="sprite" src="bubbles/f.webp" alt="" decoding="async">
+  </div>
+</div>
+
+<main>
+  <h1>amy world tour</h1>
+  <p class="tagline">a very specific life, documented</p>
+  <nav>
+    <a href="https://instagram.com/">Instagram</a>
+    <a href="#">Newsletter</a>
+    <a href="https://tbdrooms.com">TBD</a>
+    <a href="mailto:hi@amyworldtour.com">Email</a>
+  </nav>
+</main>
+
+<script>
+/* Pointer parallax. Writes two unitless numbers (-1..1) to .field; the CSS
+   above turns them into px per bubble via --par. One style write per frame
+   for the whole field, and the rAF loop parks itself once it has settled. */
+(function(){
+  var fine  = matchMedia('(hover: hover) and (pointer: fine)');
+  var still = matchMedia('(prefers-reduced-motion: reduce)');
+  if(!fine.matches || still.matches) return;
+
+  var field = document.querySelector('.field');
+  var tx=0, ty=0, cx=0, cy=0, frame=0;
+
+  function move(e){
+    tx = (e.clientX / innerWidth  - .5) * 2;
+    ty = (e.clientY / innerHeight - .5) * 2;
+    if(!frame) frame = requestAnimationFrame(tick);
+  }
+
+  function tick(){
+    cx += (tx - cx) * .07;
+    cy += (ty - cy) * .07;
+    field.style.setProperty('--mx', cx.toFixed(4));
+    field.style.setProperty('--my', cy.toFixed(4));
+    frame = (Math.abs(tx-cx) > .0005 || Math.abs(ty-cy) > .0005)
+      ? requestAnimationFrame(tick) : 0;
+  }
+
+  addEventListener('pointermove', move, {passive:true});
+
+  still.addEventListener('change', function(e){
+    if(!e.matches) return;
+    removeEventListener('pointermove', move);
+    cancelAnimationFrame(frame); frame = 0;
+    field.style.setProperty('--mx','0');
+    field.style.setProperty('--my','0');
+  });
+})();
+</script>
+
+</body>
+</html>
