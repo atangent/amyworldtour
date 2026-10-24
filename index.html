@@ -4,230 +4,1211 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>amy world tour</title>
-<meta name="description" content="Goat at work">
-
-<!-- b.webp, circle-masked so the sprite's white corners don't tile the tab -->
+<meta name="description" content="every season, to the max">
 <link rel="icon" type="image/png" sizes="32x32" href="favicon.png">
-
-<!-- <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@1,300&display=swap" rel="stylesheet"> -->
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Bitcount+Ink:wght@100..900&family=Comme:wght@100..900&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,300..800&display=swap" rel="stylesheet">
 
 <style>
+/* the sky moves through the seasons of the tour. Registered so the
+   gradient stops can transition instead of snapping. */
+@property --sky-1{syntax:"<color>";inherits:true;initial-value:#fdf1ec}
+@property --sky-2{syntax:"<color>";inherits:true;initial-value:#f4eef3}
+@property --sky-3{syntax:"<color>";inherits:true;initial-value:#d6eeee}
+@property --sun{syntax:"<color>";inherits:true;initial-value:#ffe3d6}
+
 :root{
-  --bg-1:#fbfbfc;
-  --bg-2:#f2f4f6;
   --ink:#31363c;
-  --ink-soft:#858d96;
-  --wash:radial-gradient(120% 90% at 50% 0%, var(--bg-1) 0%, var(--bg-2) 100%);
+  --ink-soft:#7d8590;
 }
+
+/* Hawaii is the resting state */
+body{--sky-1:#fdf1ec;--sky-2:#f4eef3;--sky-3:#d6eeee;--sun:#ffe3d6}
+body[data-season="vancouver"]{--sky-1:#eef1f4;--sky-2:#e3e8ee;--sky-3:#ccd6e0;--sun:#f3f5f8}
+body[data-season="whistler"] {--sky-1:#fafcff;--sky-2:#ebf1f9;--sky-3:#d3e0f1;--sun:#ffffff}
+body[data-season="europe"]   {--sky-1:#fdf6ea;--sky-2:#f7e8d2;--sky-3:#efd5b6;--sun:#fff0cf}
+body[data-season="thailand"] {--sky-1:#fff4e8;--sky-2:#fde2d4;--sky-3:#f6c9bc;--sun:#ffe0b8}
 
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%}
 
 body{
-  background:var(--wash);
+  background:
+    radial-gradient(70% 55% at 50% 8%, var(--sun) 0%, transparent 70%),
+    linear-gradient(180deg, var(--sky-1) 0%, var(--sky-2) 52%, var(--sky-3) 100%);
+  transition:--sky-1 3.5s ease,--sky-2 3.5s ease,--sky-3 3.5s ease,--sun 3.5s ease;
   color:var(--ink);
-  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+  font-family:"Bricolage Grotesque",-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
   overflow:hidden;
   display:grid;
   place-items:center;
   min-height:100svh;
 }
 
-/* ---------- bubbles ---------- */
-
-/* position:fixed makes this a stacking context, which isolates the blend
-   group — so the wash has to be painted HERE, not just on body, or the
-   sprites' white backgrounds have nothing to multiply against. */
-.field{
-  position:fixed;
-  inset:0;
-  overflow:hidden;
-  z-index:0;
-  background:var(--wash);
-  --mx:0;
-  --my:0;
+/* the WebGL canvas sits behind everything and owns pointer input for popping;
+   main lets clicks fall through except on its links */
+/* faint film grain: makes the sky feel like a photograph, not a CSS gradient */
+body::before{
+  content:"";position:fixed;inset:0;z-index:0;pointer-events:none;opacity:.07;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 .9 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
-/* wrapper owns parallax; .sprite owns drift + wobble. Two elements so the
-   two motions never contend for the same `translate`. Blend lives out here
-   because the wrapper's own translate would otherwise isolate the sprite. */
-.bubble{
-  position:absolute;
-  left:var(--x);
-  top:var(--y);
-  width:var(--size);
-  /* white background of the sprite disappears against the light page */
-  mix-blend-mode:multiply;
-  translate:calc(var(--mx) * var(--par) * -1px) calc(var(--my) * var(--par) * -1px);
-  will-change:translate;
-}
+/* soft pastel illustration of each place filling the whole backdrop,
+   crossfading with the season. Sits under the WebGL canvas. */
+.scenes{position:fixed;inset:0;z-index:0;pointer-events:none}
+.scene{position:absolute;inset:0;width:100%;height:100%;opacity:0;transition:opacity 2.4s ease}
+body:not([data-season]) .scene[data-scene="hawaii"],
+body[data-season="vancouver"] .scene[data-scene="vancouver"],
+body[data-season="europe"] .scene[data-scene="europe"],
+body[data-season="thailand"] .scene[data-scene="thailand"],
+body[data-season="whistler"] .scene[data-scene="whistler"]{opacity:1}
 
-.sprite{
-  display:block;
-  width:100%;
-  height:auto;
-  animation:
-    drift var(--dur) ease-in-out infinite alternate,
-    wobble var(--wob) ease-in-out infinite alternate;
-  animation-delay:var(--delay), calc(var(--delay) * -0.7);
-  will-change:translate, scale;
-}
+#scene{position:fixed;inset:0;width:100%;height:100%;display:block;z-index:0;touch-action:manipulation}
+#scene.hot{cursor:pointer}
 
-/* only the three biggest get the slow colour shift — cheap, and enough */
-.shimmer{animation:
-    drift var(--dur) ease-in-out infinite alternate,
-    wobble var(--wob) ease-in-out infinite alternate,
-    shift 72s ease-in-out infinite;
+/* main shrinks to the title's width so the note + contacts can share its
+   left edge */
+main{
+  position:relative;z-index:1;text-align:center;padding:2rem 1.5rem;
+  width:fit-content;max-width:100%;
+  pointer-events:none;
 }
-
-@keyframes drift{
-  from{translate:0 0}
-  to  {translate:var(--dx) var(--dy)}
-}
-@keyframes wobble{
-  0%  {scale:1.015 .985}
-  50% {scale:.99 1.01}
-  100%{scale:1.012 .988}
-}
-@keyframes shift{
-  0%,100%{filter:hue-rotate(0deg)}
-  50%    {filter:hue-rotate(-26deg)}
-}
-
-/* ---------- content ---------- */
-
-main{position:relative;z-index:1;text-align:center;padding:2rem 1.5rem}
+main a{pointer-events:auto}
 
 h1{
-  font-family:"Cormorant Garamond",Georgia,serif;
-  font-style:italic;
-  font-weight:300;
-  font-size:clamp(3rem,11vw,7.5rem);
+  font-weight:700;
+  font-size:clamp(3rem,10vw,6.75rem);
   line-height:.95;
-  letter-spacing:-.015em;
+  letter-spacing:-.045em;
 }
 
-.tagline{
-  margin:1.0rem auto 0;
-  max-width:50rem;
-  font-family:"Comme",-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
-  font-size:1.0625rem;
-  line-height:1.65;
-  letter-spacing:0;
-  color:var(--ink);
+.lede{
+  margin:1.4rem auto 0;
+  font-weight:400;
+  font-size:clamp(1.15rem,2.6vw,1.5rem);
+  line-height:1.25;
+  letter-spacing:-.01em;
 }
 
-nav{margin-top:3.2rem;display:flex;flex-wrap:wrap;justify-content:center;gap:.4rem 2rem}
+.story p + p{margin-top:.6rem}
 
+/* the tour so far, oldest to now */
+.route{
+  margin:2rem auto 0;
+  max-width:44rem;
+  list-style:none;
+  display:flex;flex-wrap:wrap;justify-content:center;gap:.35rem 0;
+  font-size:.72rem;letter-spacing:.15em;text-transform:uppercase;color:var(--ink-soft);
+}
+.route li + li::before{content:"\2192";margin:0 .7em;opacity:.6}
+@media (max-width:640px){
+  .route{flex-direction:column;align-items:center;gap:.45rem}
+  .route li + li::before{content:none}
+}
+.route li{white-space:nowrap;transition:color .8s ease}
+.route li.on{color:var(--ink)}
+.route button{
+  all:unset;pointer-events:auto;cursor:pointer;
+  padding:.3rem 0;border-bottom:1px dotted color-mix(in srgb, currentColor 55%, transparent);
+  transition:border-color .35s ease;
+}
+.route button:hover,.route button[aria-expanded="true"]{border-bottom:1px solid currentColor}
+.route button:focus-visible{outline:2px solid #b9c9e6;outline-offset:4px;border-radius:2px}
+
+/* what I did there. In flow, with room reserved for the longest note, so
+   the contacts underneath stay put as the seasons change */
+.stop{min-height:5.9rem;width:0;min-width:100%;text-align:left}
+@media (max-width:640px){ .stop{min-height:9rem} }
+.stop p{
+  margin:1rem 0 0;max-width:32rem;
+  font-size:1rem;line-height:1.6;text-wrap:pretty;
+  text-shadow:0 0 10px rgba(255,255,255,.95),0 0 22px rgba(255,255,255,.8);
+  opacity:0;translate:0 -6px;transition:opacity .45s ease, translate .45s ease;
+}
+.stop.open p{opacity:1;translate:0 0}
+
+/* contacts span the title's width exactly (width:0 + min-width:100% keeps
+   them from widening main) and wrap on small screens */
+nav{
+  margin-top:.9rem;width:0;min-width:100%;
+  display:flex;flex-wrap:wrap;justify-content:space-between;gap:.3rem .75rem;
+  font-size:.78rem;line-height:1.45;white-space:nowrap;
+  text-shadow:0 0 10px rgba(255,255,255,.95),0 0 22px rgba(255,255,255,.8);
+}
+@media (max-width:640px){
+  nav{justify-content:center;gap:.3rem 1.1rem;font-size:.8rem}
+}
+nav p{pointer-events:auto;user-select:text}
 nav a{
   color:var(--ink);
   text-decoration:none;
-  font-size:.76rem;
-  letter-spacing:.15em;
-  text-transform:uppercase;
-  padding:.4rem 0;
-  border-bottom:1px solid transparent;
+  border-bottom:1px solid color-mix(in srgb, var(--ink) 30%, transparent);
   transition:border-color .35s ease;
 }
 nav a:hover,nav a:focus-visible{border-bottom-color:var(--ink)}
 a:focus-visible{outline:2px solid #b9c9e6;outline-offset:6px;border-radius:2px}
 
+.hint{
+  position:fixed;right:calc(1.5rem + env(safe-area-inset-right,0px));bottom:calc(1.25rem + env(safe-area-inset-bottom,0px));
+  z-index:1;text-align:right;pointer-events:none;
+  font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;color:var(--ink-soft);
+  opacity:0;transition:opacity 1.2s ease;
+}
+.hint.on{opacity:.8}
+
+/* staggered entrance */
+.rise{opacity:0;translate:0 14px;transition:opacity 1.4s ease, translate 1.4s cubic-bezier(.2,.7,.2,1)}
+.ready .rise{opacity:1;translate:0 0}
+.ready .rise:nth-child(2){transition-delay:.25s}
+.ready .rise:nth-child(3){transition-delay:.5s}
+.ready .rise:nth-child(4){transition-delay:.75s}
+
 @media (prefers-reduced-motion: reduce){
-  .sprite{animation:none}
-  .bubble{translate:none}
+  .rise{transition:none}
 }
 </style>
 </head>
 <body>
 
-<div class="field" aria-hidden="true">
-  <div class="bubble" style="--size:min(36vmin,320px); --x:4%;  --y:10%; --dx:5vw;  --dy:7vh;  --dur:28s; --wob:9s;  --delay:0s;   --par:10">
-    <img class="sprite shimmer" src="bubbles/b.webp" alt="" decoding="async">
-  </div>
-
-  <div class="bubble" style="--size:min(25vmin,220px); --x:72%; --y:5%;  --dx:-4vw; --dy:9vh;  --dur:33s; --wob:11s; --delay:-7s;  --par:15">
-    <img class="sprite" src="bubbles/d.webp" alt="" decoding="async">
-  </div>
-
-  <div class="bubble" style="--size:min(10vmin,88px);  --x:56%; --y:27%; --dx:6vw;  --dy:-5vh; --dur:20s; --wob:7s;  --delay:-3s;  --par:21">
-    <img class="sprite" src="bubbles/e.webp" alt="" decoding="async">
-  </div>
-
-  <div class="bubble" style="--size:min(40vmin,360px); --x:60%; --y:50%; --dx:-6vw; --dy:-8vh; --dur:37s; --wob:13s; --delay:-13s; --par:8">
-    <img class="sprite shimmer" src="bubbles/a.webp" alt="" decoding="async">
-  </div>
-
-  <div class="bubble" style="--size:min(14vmin,124px); --x:87%; --y:57%; --dx:-5vw; --dy:6vh;  --dur:24s; --wob:8s;  --delay:-9s;  --par:19">
-    <img class="sprite" src="bubbles/f.webp" alt="" decoding="async">
-  </div>
-
-  <div class="bubble" style="--size:min(28vmin,250px); --x:2%;  --y:62%; --dx:7vw;  --dy:-6vh; --dur:31s; --wob:12s; --delay:-17s; --par:13">
-    <img class="sprite shimmer" src="bubbles/c.webp" alt="" decoding="async">
-  </div>
-
-  <div class="bubble" style="--size:min(8vmin,70px);   --x:28%; --y:85%; --dx:9vw;  --dy:-12vh;--dur:22s; --wob:6s;  --delay:-2s;  --par:22">
-    <img class="sprite" src="bubbles/e.webp" alt="" decoding="async">
-  </div>
-
-  <div class="bubble" style="--size:min(11vmin,95px);  --x:41%; --y:3%;  --dx:-7vw; --dy:8vh;  --dur:26s; --wob:9s;  --delay:-11s; --par:21">
-    <img class="sprite" src="bubbles/f.webp" alt="" decoding="async">
-  </div>
+<div class="scenes" aria-hidden="true">
+  <svg class="scene" data-scene="vancouver" viewBox="0 0 1440 900" preserveAspectRatio="xMidYMax slice">
+    <g fill="#fff" opacity="0.8"><ellipse cx="250" cy="150" rx="98" ry="31"/><ellipse cx="208" cy="130" rx="50" ry="34"/><ellipse cx="281" cy="122" rx="59" ry="42"/></g>
+    <g fill="#fff" opacity="0.7"><ellipse cx="900" cy="120" rx="112" ry="35"/><ellipse cx="852" cy="98" rx="58" ry="38"/><ellipse cx="935" cy="88" rx="67" ry="48"/></g>
+    <g fill="#fff" opacity="0.7"><ellipse cx="1300" cy="230" rx="70" ry="22"/><ellipse cx="1270" cy="216" rx="36" ry="24"/><ellipse cx="1322" cy="210" rx="42" ry="30"/></g>
+    <path d="M-40,407 C-4,394 105,339 177,327 C250,315 322,330 394,335 C467,341 539,349 611,359 C684,370 756,407 829,399 C901,391 973,327 1046,312 C1118,297 1190,302 1263,309 C1335,316 1444,347 1480,354 L1480,900 L-40,900 Z" fill="#dce3ea"/>
+    <path d="M-40,405 C-12,420 73,479 129,496 C185,514 241,525 298,509 C354,493 410,403 467,400 C523,397 579,475 636,491 C692,508 748,507 804,498 C861,490 917,443 973,439 C1030,435 1086,478 1142,473 C1199,469 1255,410 1311,412 C1367,414 1452,474 1480,486 L1480,900 L-40,900 Z" fill="#d0d9e2"/>
+    <rect x="260" y="531" width="46" height="81" fill="#e4e9ef"/>
+    <rect x="313" y="455" width="55" height="157" fill="#e9edf2"/>
+    <rect x="376" y="503" width="36" height="109" fill="#dbe2ea"/>
+    <rect x="422" y="496" width="28" height="116" fill="#e9edf2"/>
+    <rect x="460" y="525" width="29" height="87" fill="#e4e9ef"/>
+    <rect x="499" y="547" width="54" height="65" fill="#e9edf2"/>
+    <rect x="562" y="478" width="50" height="134" fill="#e4e9ef"/>
+    <rect x="615" y="448" width="51" height="164" fill="#e9edf2"/>
+    <rect x="672" y="398" width="51" height="214" fill="#e9edf2"/>
+    <rect x="730" y="471" width="48" height="141" fill="#dbe2ea"/>
+    <rect x="783" y="378" width="58" height="234" fill="#e9edf2"/>
+    <rect x="846" y="507" width="39" height="105" fill="#e9edf2"/>
+    <rect x="893" y="523" width="40" height="89" fill="#e4e9ef"/>
+    <rect x="937" y="543" width="55" height="69" fill="#e9edf2"/>
+    <rect x="999" y="468" width="45" height="144" fill="#e4e9ef"/>
+    <rect x="1052" y="414" width="46" height="198" fill="#dbe2ea"/>
+    <rect x="1108" y="486" width="41" height="126" fill="#e4e9ef"/>
+    <rect x="1153" y="426" width="35" height="186" fill="#e4e9ef"/>
+    <rect x="0" y="612" width="1440" height="288" fill="#d3dee6"/><path d="M1117,704 h105" stroke="#e8eef3" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M205,828 h51" stroke="#e8eef3" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M920,649 h37" stroke="#e8eef3" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M1291,845 h80" stroke="#e8eef3" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M47,715 h58" stroke="#e8eef3" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M1407,638 h58" stroke="#e8eef3" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M116,859 h41" stroke="#e8eef3" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M708,640 h78" stroke="#e8eef3" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M1004,730 h34" stroke="#e8eef3" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M155,767 h89" stroke="#e8eef3" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M1122,732 h88" stroke="#e8eef3" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M605,742 h41" stroke="#e8eef3" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M211,718 h118" stroke="#e8eef3" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M1113,754 h62" stroke="#e8eef3" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M204,847 h51" stroke="#e8eef3" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M24,859 h73" stroke="#e8eef3" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M1344,844 h51" stroke="#e8eef3" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M1263,843 h38" stroke="#e8eef3" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M1419,754 h99" stroke="#e8eef3" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M604,849 h82" stroke="#e8eef3" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M612,658 h66" stroke="#e8eef3" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M222,644 h110" stroke="#e8eef3" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M285,802 h101" stroke="#e8eef3" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M881,759 h51" stroke="#e8eef3" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M1352,672 h73" stroke="#e8eef3" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M1151,690 h60" stroke="#e8eef3" stroke-width="3" stroke-linecap="round" opacity=".7"/>
+    <path d="M20,670 L66,757 L49,757 L86,831 L61,831 L102.8,891 L-62.8,891 L-21,831 L-46,831 L-9,757 L-26,757 Z M16,888 h8 v16 h-8 Z" fill="#bfcad3"/>
+    <path d="M1440,690 L1482,770 L1466,770 L1500,837 L1478,837 L1515.6,892 L1364.4,892 L1402,837 L1380,837 L1414,770 L1398,770 Z M1436,890 h8 v15 h-8 Z" fill="#c6d0d8"/>
+    <path d="M68,630 L121,733 L102,733 L146,819 L117,819 L165.2,889 L-29.200000000000003,889 L19,819 L-10,819 L34,733 L15,733 Z M64,886 h8 v19 h-8 Z" fill="#bfcad3"/>
+    <path d="M1388,640 L1439,739 L1421,739 L1463,822 L1435,822 L1481.6,890 L1294.4,890 L1341,822 L1313,822 L1355,739 L1337,739 Z M1384,887 h8 v18 h-8 Z" fill="#c6d0d8"/>
+    <path d="M116,590 L177,708 L155,708 L205,807 L172,807 L227.6,888 L4.400000000000006,888 L60,807 L27,807 L77,708 L55,708 Z M112,884 h8 v22 h-8 Z" fill="#bfcad3"/>
+    <path d="M1336,690 L1378,770 L1362,770 L1396,837 L1374,837 L1411.6,892 L1260.4,892 L1298,837 L1276,837 L1310,770 L1294,770 Z M1332,890 h8 v15 h-8 Z" fill="#c6d0d8"/>
+    <path d="M164,670 L210,757 L193,757 L230,831 L205,831 L246.8,891 L81.2,891 L123,831 L98,831 L135,757 L118,757 Z M160,888 h8 v16 h-8 Z" fill="#bfcad3"/>
+    <path d="M1284,640 L1335,739 L1317,739 L1359,822 L1331,822 L1377.6,890 L1190.4,890 L1237,822 L1209,822 L1251,739 L1233,739 Z M1280,887 h8 v18 h-8 Z" fill="#c6d0d8"/>
+    <path d="M212,630 L265,733 L246,733 L290,819 L261,819 L309.2,889 L114.8,889 L163,819 L134,819 L178,733 L159,733 Z M208,886 h8 v19 h-8 Z" fill="#bfcad3"/>
+    <path d="M1232,690 L1274,770 L1258,770 L1292,837 L1270,837 L1307.6,892 L1156.4,892 L1194,837 L1172,837 L1206,770 L1190,770 Z M1228,890 h8 v15 h-8 Z" fill="#c6d0d8"/>
+    <path d="M260,590 L321,708 L299,708 L349,807 L316,807 L371.6,888 L148.4,888 L204,807 L171,807 L221,708 L199,708 Z M256,884 h8 v22 h-8 Z" fill="#bfcad3"/>
+    <path d="M1180,640 L1231,739 L1213,739 L1255,822 L1227,822 L1273.6,890 L1086.4,890 L1133,822 L1105,822 L1147,739 L1129,739 Z M1176,887 h8 v18 h-8 Z" fill="#c6d0d8"/>
+    <path d="M308,670 L354,757 L337,757 L374,831 L349,831 L390.8,891 L225.2,891 L267,831 L242,831 L279,757 L262,757 Z M304,888 h8 v16 h-8 Z" fill="#bfcad3"/>
+    <path d="M1128,690 L1170,770 L1154,770 L1188,837 L1166,837 L1203.6,892 L1052.4,892 L1090,837 L1068,837 L1102,770 L1086,770 Z M1124,890 h8 v15 h-8 Z" fill="#c6d0d8"/>
+    <path d="M356,630 L409,733 L390,733 L434,819 L405,819 L453.2,889 L258.8,889 L307,819 L278,819 L322,733 L303,733 Z M352,886 h8 v19 h-8 Z" fill="#bfcad3"/>
+    <path d="M1076,640 L1127,739 L1109,739 L1151,822 L1123,822 L1169.6,890 L982.4,890 L1029,822 L1001,822 L1043,739 L1025,739 Z M1072,887 h8 v18 h-8 Z" fill="#c6d0d8"/>
+    <path d="M404,590 L465,708 L443,708 L493,807 L460,807 L515.6,888 L292.4,888 L348,807 L315,807 L365,708 L343,708 Z M400,884 h8 v22 h-8 Z" fill="#bfcad3"/>
+    <path d="M1024,690 L1066,770 L1050,770 L1084,837 L1062,837 L1099.6,892 L948.4,892 L986,837 L964,837 L998,770 L982,770 Z M1020,890 h8 v15 h-8 Z" fill="#c6d0d8"/>
+  </svg>
+  <svg class="scene" data-scene="europe" viewBox="0 0 1440 900" preserveAspectRatio="xMidYMax slice">
+    <circle cx="1150" cy="230" r="95" fill="#ffe3a8" opacity="1"/>
+    <g fill="#fff" opacity="0.7"><ellipse cx="380" cy="170" rx="70" ry="22"/><ellipse cx="350" cy="156" rx="36" ry="24"/><ellipse cx="402" cy="150" rx="42" ry="30"/></g>
+    <path d="M-40,330 C150,320 300,360 420,430 C520,490 600,560 720,612 L760,612 L1440,900 L0,900 Z" fill="#efd9bd"/>
+    <rect x="321" y="456" width="30" height="27" fill="#fbf3e8"/>
+    <rect x="321" y="450" width="30" height="6" fill="#e9b9a0"/>
+    <rect x="321" y="470" width="36" height="39" fill="#fbf3e8"/>
+    <rect x="130" y="450" width="39" height="27" fill="#f6e6d1"/>
+    <rect x="130" y="444" width="39" height="6" fill="#e9b9a0"/>
+    <rect x="92" y="394" width="44" height="24" fill="#f8eedc"/>
+    <rect x="597" y="650" width="32" height="29" fill="#f8eedc"/>
+    <rect x="522" y="608" width="38" height="30" fill="#f3d6c0"/>
+    <rect x="150" y="453" width="39" height="23" fill="#f8eedc"/>
+    <rect x="110" y="371" width="29" height="22" fill="#fbf3e8"/>
+    <rect x="148" y="450" width="36" height="22" fill="#fbf3e8"/>
+    <rect x="148" y="444" width="36" height="6" fill="#e9b9a0"/>
+    <rect x="616" y="607" width="44" height="37" fill="#f6e6d1"/>
+    <rect x="616" y="601" width="44" height="6" fill="#e9b9a0"/>
+    <rect x="279" y="455" width="28" height="40" fill="#f6e6d1"/>
+    <rect x="279" y="449" width="28" height="6" fill="#e9b9a0"/>
+    <rect x="416" y="560" width="27" height="30" fill="#f6e6d1"/>
+    <rect x="499" y="564" width="27" height="25" fill="#f8eedc"/>
+    <rect x="174" y="420" width="27" height="33" fill="#fbf3e8"/>
+    <rect x="91" y="423" width="37" height="36" fill="#f6e6d1"/>
+    <rect x="91" y="417" width="37" height="6" fill="#e9b9a0"/>
+    <rect x="661" y="644" width="26" height="34" fill="#f3d6c0"/>
+    <rect x="661" y="638" width="26" height="6" fill="#e9b9a0"/>
+    <rect x="93" y="355" width="34" height="32" fill="#fbf3e8"/>
+    <rect x="93" y="349" width="34" height="6" fill="#e9b9a0"/>
+    <rect x="205" y="431" width="27" height="22" fill="#f8eedc"/>
+    <rect x="545" y="565" width="33" height="40" fill="#fbf3e8"/>
+    <rect x="545" y="559" width="33" height="6" fill="#e9b9a0"/>
+    <rect x="170" y="453" width="38" height="38" fill="#f3d6c0"/>
+    <rect x="384" y="458" width="35" height="27" fill="#f3d6c0"/>
+    <rect x="384" y="452" width="35" height="6" fill="#e9b9a0"/>
+    <rect x="631" y="659" width="34" height="27" fill="#fbf3e8"/>
+    <rect x="28" y="323" width="32" height="34" fill="#f3d6c0"/>
+    <rect x="648" y="609" width="30" height="37" fill="#f3d6c0"/>
+    <rect x="648" y="603" width="30" height="6" fill="#e9b9a0"/>
+    <rect x="76" y="396" width="29" height="24" fill="#f8eedc"/>
+    <rect x="76" y="390" width="29" height="6" fill="#e9b9a0"/>
+    <rect x="477" y="559" width="38" height="40" fill="#f6e6d1"/>
+    <rect x="198" y="423" width="45" height="37" fill="#f3d6c0"/>
+    <rect x="198" y="417" width="45" height="6" fill="#e9b9a0"/>
+    <rect x="51" y="388" width="31" height="24" fill="#f6e6d1"/>
+    <rect x="165" y="347" width="31" height="37" fill="#f8eedc"/>
+    <rect x="375" y="438" width="43" height="37" fill="#f3d6c0"/>
+    <rect x="632" y="566" width="44" height="35" fill="#f3d6c0"/>
+    <rect x="369" y="523" width="28" height="40" fill="#f3d6c0"/>
+    <rect x="369" y="517" width="28" height="6" fill="#e9b9a0"/>
+    <rect x="166" y="361" width="29" height="37" fill="#f8eedc"/>
+    <rect x="166" y="355" width="29" height="6" fill="#e9b9a0"/>
+    <rect x="598" y="637" width="45" height="22" fill="#f3d6c0"/>
+    <rect x="598" y="631" width="45" height="6" fill="#e9b9a0"/>
+    <rect x="318" y="444" width="44" height="37" fill="#f6e6d1"/>
+    <rect x="318" y="438" width="44" height="6" fill="#e9b9a0"/>
+    <rect x="408" y="514" width="39" height="35" fill="#fbf3e8"/>
+    <rect x="408" y="508" width="39" height="6" fill="#e9b9a0"/>
+    <rect x="42" y="411" width="28" height="24" fill="#fbf3e8"/>
+    <rect x="42" y="405" width="28" height="6" fill="#e9b9a0"/>
+    <rect x="326" y="479" width="26" height="24" fill="#f3d6c0"/>
+    <rect x="326" y="473" width="26" height="6" fill="#e9b9a0"/>
+    <rect x="229" y="416" width="40" height="40" fill="#f6e6d1"/>
+    <rect x="661" y="673" width="29" height="33" fill="#f6e6d1"/>
+    <rect x="661" y="667" width="29" height="6" fill="#e9b9a0"/>
+    <rect x="0" y="612" width="1440" height="288" fill="#cfe0ec"/><path d="M265,730 h58" stroke="#eaf2f8" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M222,688 h36" stroke="#eaf2f8" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M245,670 h112" stroke="#eaf2f8" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M169,822 h43" stroke="#eaf2f8" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M48,871 h110" stroke="#eaf2f8" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M1069,734 h77" stroke="#eaf2f8" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M1299,673 h60" stroke="#eaf2f8" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M11,763 h96" stroke="#eaf2f8" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M1398,733 h31" stroke="#eaf2f8" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M899,761 h108" stroke="#eaf2f8" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M45,684 h96" stroke="#eaf2f8" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M854,661 h62" stroke="#eaf2f8" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M973,793 h107" stroke="#eaf2f8" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M451,662 h117" stroke="#eaf2f8" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M563,699 h68" stroke="#eaf2f8" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M79,727 h75" stroke="#eaf2f8" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M825,635 h68" stroke="#eaf2f8" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M193,647 h70" stroke="#eaf2f8" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M899,758 h83" stroke="#eaf2f8" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M1237,796 h92" stroke="#eaf2f8" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M1153,809 h81" stroke="#eaf2f8" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M880,738 h40" stroke="#eaf2f8" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M566,786 h89" stroke="#eaf2f8" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M955,865 h86" stroke="#eaf2f8" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M788,727 h72" stroke="#eaf2f8" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M823,662 h71" stroke="#eaf2f8" stroke-width="3" stroke-linecap="round" opacity=".7"/>
+    <path d="M1000,700 L1110,700 L1094,718 L1016,718 Z" fill="#d9c8b4"/>
+    <path d="M1052,698 L1052,580 L1110,690 Z" fill="#fbf3e8"/>
+    <path d="M1048,604 L1004,694 L1048,694 Z" fill="#f5e7d6"/>
+    <path d="M1330,900 C1290,760 1310,560 1350,470 C1390,560 1410,760 1370,900 Z" fill="#cfd3ad"/>
+    <path d="M1240,900 C1215,800 1225,680 1255,620 C1285,680 1295,800 1270,900 Z" fill="#d8dbbb"/>
+  </svg>
+  <svg class="scene" data-scene="thailand" viewBox="0 0 1440 900" preserveAspectRatio="xMidYMax slice">
+    <circle cx="820" cy="380" r="140" fill="#ffd2b5" opacity="1"/>
+    <g fill="#fff" opacity="0.7"><ellipse cx="260" cy="180" rx="77" ry="24"/><ellipse cx="227" cy="165" rx="40" ry="26"/><ellipse cx="284" cy="158" rx="46" ry="33"/></g>
+    <path d="M-40,612 C-35,430 -14,282 69,282 C168,282 215,447 220,612 Z" fill="#e2dcd0"/>
+    <path d="M200,612 C204,381 219,192 280,192 C352,192 386,402 390,612 Z" fill="#e2dcd0"/>
+    <path d="M1000,612 C1005,403 1023,232 1097,232 C1184,232 1225,422 1230,612 Z" fill="#e2dcd0"/>
+    <path d="M1240,612 C1245,447 1264,312 1341,312 C1432,312 1475,462 1480,612 Z" fill="#e2dcd0"/>
+    <path d="M60,612 C63,474 77,362 131,362 C196,362 227,487 230,612 Z" fill="#d4d8c6"/>
+    <path d="M380,612 C383,502 394,412 439,412 C492,412 517,512 520,612 Z" fill="#d4d8c6"/>
+    <path d="M900,612 C904,458 918,332 976,332 C1044,332 1076,472 1080,612 Z" fill="#d4d8c6"/>
+    <path d="M1150,612 C1153,502 1166,412 1217,412 C1278,412 1307,512 1310,612 Z" fill="#d4d8c6"/>
+    <rect x="0" y="612" width="1440" height="288" fill="#cde6dc"/><path d="M115,678 h40" stroke="#e6f4ee" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M739,718 h115" stroke="#e6f4ee" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M631,760 h107" stroke="#e6f4ee" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M434,650 h104" stroke="#e6f4ee" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M1395,713 h85" stroke="#e6f4ee" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M1307,833 h95" stroke="#e6f4ee" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M761,859 h94" stroke="#e6f4ee" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M549,650 h33" stroke="#e6f4ee" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M745,870 h70" stroke="#e6f4ee" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M778,848 h97" stroke="#e6f4ee" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M336,722 h60" stroke="#e6f4ee" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M472,644 h52" stroke="#e6f4ee" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M665,720 h47" stroke="#e6f4ee" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M1044,816 h95" stroke="#e6f4ee" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M1381,725 h87" stroke="#e6f4ee" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M849,818 h105" stroke="#e6f4ee" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M724,817 h87" stroke="#e6f4ee" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M330,836 h89" stroke="#e6f4ee" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M1341,759 h92" stroke="#e6f4ee" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M571,887 h94" stroke="#e6f4ee" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M1055,813 h114" stroke="#e6f4ee" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M931,868 h74" stroke="#e6f4ee" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M1162,865 h92" stroke="#e6f4ee" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M1349,745 h71" stroke="#e6f4ee" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M1432,717 h108" stroke="#e6f4ee" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M549,877 h69" stroke="#e6f4ee" stroke-width="3" stroke-linecap="round" opacity=".7"/>
+    <path d="M1290,700 C1294,584 1310,490 1374,490 C1450,490 1486,595 1490,700 Z" fill="#c2d3c0"/>
+    <path d="M0,720 C300,705 800,735 1440,712 L1440,900 L0,900 Z" fill="#bfe0d3"/>
+    <path d="M480,770 Q580,800 760,782 L800,748 Q640,770 480,770 Z" fill="#c9a98e"/>
+    <path d="M600,764 L600,726 L690,726 L690,770 Z" fill="#e4cfb6"/>
+    <path d="M121,900 C142,756 176,630 228,540 L235,540 C185,630 155,756 139,900 Z" fill="#b2d1bd"/><path d="M231,540 Q142,493 54,605 Q142,517 231,546 Z" fill="#b2d1bd"/><path d="M231,540 Q162,468 93,563 Q162,492 231,546 Z" fill="#b2d1bd"/><path d="M231,540 Q200,452 169,536 Q200,476 231,546 Z" fill="#b2d1bd"/><path d="M231,540 Q262,452 292,536 Q262,476 231,546 Z" fill="#b2d1bd"/><path d="M231,540 Q305,471 378,569 Q305,495 231,546 Z" fill="#b2d1bd"/><path d="M231,540 Q320,498 410,613 Q320,522 231,546 Z" fill="#b2d1bd"/><path d="M231,540 Q312,525 394,659 Q312,549 231,546 Z" fill="#b2d1bd"/><path d="M231,540 Q146,484 62,590 Q146,508 231,546 Z" fill="#b2d1bd"/>
+  </svg>
+  <svg class="scene" data-scene="whistler" viewBox="0 0 1440 900" preserveAspectRatio="xMidYMax slice">
+    <circle cx="400" cy="200" r="70" fill="#ffffff" opacity="0.9"/>
+    <g fill="#fff" opacity="0.8"><ellipse cx="1100" cy="180" rx="84" ry="26"/><ellipse cx="1064" cy="163" rx="43" ry="29"/><ellipse cx="1126" cy="156" rx="50" ry="36"/></g>
+    <path d="M-40,455 L129,306 L298,412 L467,331 L636,450 L804,299 L973,480 L1142,319 L1311,439 L1480,245 L1480,900 L-40,900 Z" fill="#e3eaf4"/>
+    <path d="M-40,555 L87,440 L213,544 L340,531 L467,584 L593,490 L720,568 L847,413 L973,542 L1100,450 L1227,550 L1353,440 L1480,576 L1480,900 L-40,900 Z" fill="#d6e0ee"/>
+    <path d="M-40,651 C-4,644 105,617 177,610 C250,603 322,613 394,610 C467,608 539,586 611,594 C684,602 756,648 829,658 C901,668 973,653 1046,654 C1118,654 1190,662 1263,662 C1335,662 1444,656 1480,654 L1480,900 L-40,900 Z" fill="#edf2f9"/>
+    <path d="M198,638 L241,721 L225,721 L261,791 L237,791 L276.48,847 L119.52,847 L159,791 L135,791 L171,721 L155,721 Z M194,845 h8 v15 h-8 Z" fill="#cdd8e7"/>
+    <path d="M1059,625 L1110,724 L1092,724 L1134,807 L1106,807 L1152.6,875 L965.4,875 L1012,807 L984,807 L1026,724 L1008,724 Z M1055,872 h8 v18 h-8 Z" fill="#b8c7db"/>
+    <path d="M503,677 L538,744 L525,744 L554,801 L535,801 L566.72,847 L439.28,847 L471,801 L452,801 L481,744 L468,744 Z M499,845 h8 v12 h-8 Z" fill="#c4d1e2"/>
+    <path d="M1328,684 L1367,759 L1353,759 L1385,822 L1363,822 L1398.92,873 L1257.08,873 L1293,822 L1271,822 L1303,759 L1289,759 Z M1324,871 h8 v14 h-8 Z" fill="#b8c7db"/>
+    <path d="M1381,624 L1431,719 L1413,719 L1453,800 L1426,800 L1471.36,865 L1290.64,865 L1336,800 L1309,800 L1349,719 L1331,719 Z M1377,862 h8 v18 h-8 Z" fill="#b8c7db"/>
+    <path d="M222,713 L256,779 L244,779 L272,834 L253,834 L284.28,879 L159.72,879 L191,834 L172,834 L200,779 L188,779 Z M218,877 h8 v12 h-8 Z" fill="#b8c7db"/>
+    <path d="M713,641 L761,733 L744,733 L783,811 L757,811 L800.48,874 L625.52,874 L669,811 L643,811 L682,733 L665,733 Z M709,872 h8 v17 h-8 Z" fill="#b8c7db"/>
+    <path d="M1275,647 L1319,731 L1303,731 L1338,801 L1315,801 L1354.2,858 L1195.8,858 L1235,801 L1212,801 L1247,731 L1231,731 Z M1271,856 h8 v15 h-8 Z" fill="#c4d1e2"/>
+    <path d="M309,648 L351,728 L335,728 L369,795 L347,795 L384.6,850 L233.4,850 L271,795 L249,795 L283,728 L267,728 Z M305,848 h8 v15 h-8 Z" fill="#cdd8e7"/>
+    <path d="M543,739 L575,800 L563,800 L589,852 L572,852 L600.96,894 L485.04,894 L514,852 L497,852 L523,800 L511,800 Z M539,892 h8 v11 h-8 Z" fill="#cdd8e7"/>
+    <path d="M123,707 L154,766 L143,766 L168,816 L151,816 L178.8,856 L67.2,856 L95,816 L78,816 L103,766 L92,766 Z M119,854 h8 v11 h-8 Z" fill="#b8c7db"/>
+    <path d="M36,733 L66,790 L55,790 L79,838 L63,838 L90.0,877 L-18.0,877 L9,838 L-7,838 L17,790 L6,790 Z M32,876 h8 v11 h-8 Z" fill="#c4d1e2"/>
+    <path d="M762,672 L800,745 L786,745 L817,806 L796,806 L830.76,855 L693.24,855 L728,806 L707,806 L738,745 L724,745 Z M758,853 h8 v13 h-8 Z" fill="#b8c7db"/>
+    <path d="M1224,693 L1254,751 L1243,751 L1268,799 L1251,799 L1278.72,839 L1169.28,839 L1197,799 L1180,799 L1205,751 L1194,751 Z M1220,837 h8 v11 h-8 Z" fill="#cdd8e7"/>
+    <path d="M1386,640 L1436,736 L1418,736 L1459,817 L1432,817 L1477.08,883 L1294.92,883 L1340,817 L1313,817 L1354,736 L1336,736 Z M1382,880 h8 v18 h-8 Z" fill="#cdd8e7"/>
+    <path d="M1186,639 L1230,723 L1214,723 L1250,794 L1226,794 L1265.56,851 L1106.44,851 L1146,794 L1122,794 L1158,723 L1142,723 Z M1182,849 h8 v15 h-8 Z" fill="#b8c7db"/>
+    <path d="M351,644 L400,739 L382,739 L423,819 L396,819 L441.0,884 L261.0,884 L306,819 L279,819 L320,739 L302,739 Z M347,882 h8 v18 h-8 Z" fill="#cdd8e7"/>
+    <path d="M976,652 L1017,730 L1002,730 L1035,796 L1013,796 L1049.8,849 L902.2,849 L939,796 L917,796 L950,730 L935,730 Z M972,847 h8 v14 h-8 Z" fill="#c4d1e2"/>
+    <path d="M534,664 L573,739 L559,739 L591,802 L569,802 L604.92,853 L463.08,853 L499,802 L477,802 L509,739 L495,739 Z M530,851 h8 v14 h-8 Z" fill="#c4d1e2"/>
+    <path d="M972,640 L1020,732 L1002,732 L1042,809 L1016,809 L1059.12,872 L884.88,872 L928,809 L902,809 L942,732 L924,732 Z M968,870 h8 v17 h-8 Z" fill="#cdd8e7"/>
+    <path d="M501,740 L531,798 L520,798 L545,847 L529,847 L556.08,887 L445.92,887 L473,847 L457,847 L482,798 L471,798 Z M497,885 h8 v11 h-8 Z" fill="#c4d1e2"/>
+    <path d="M550,718 L585,784 L572,784 L600,840 L582,840 L613.0,886 L487.0,886 L518,840 L500,840 L528,784 L515,784 Z M546,884 h8 v12 h-8 Z" fill="#c4d1e2"/>
+    <path d="M311,640 L357,729 L340,729 L378,804 L353,804 L395.24,865 L226.76,865 L269,804 L244,804 L282,729 L265,729 Z M307,862 h8 v16 h-8 Z" fill="#c4d1e2"/>
+    <path d="M1385,656 L1426,735 L1411,735 L1445,801 L1422,801 L1459.52,855 L1310.48,855 L1348,801 L1325,801 L1359,735 L1344,735 Z M1381,853 h8 v14 h-8 Z" fill="#c4d1e2"/>
+    <path d="M850,656 L890,732 L875,732 L908,797 L886,797 L922.36,849 L777.64,849 L814,797 L792,797 L825,732 L810,732 Z M846,847 h8 v14 h-8 Z" fill="#c4d1e2"/>
+    <path d="M1075,682 L1112,754 L1099,754 L1129,814 L1109,814 L1143.04,863 L1006.96,863 L1041,814 L1021,814 L1051,754 L1038,754 Z M1071,862 h8 v13 h-8 Z" fill="#b8c7db"/>
+    <path d="M0,860 C400,840 900,870 1440,850 L1440,900 L0,900 Z" fill="#f6f9fd"/>
+  </svg>
+  <svg class="scene" data-scene="hawaii" viewBox="0 0 1440 900" preserveAspectRatio="xMidYMax slice">
+    <circle cx="1060" cy="470" r="120" fill="#ffd9c4" opacity="1"/>
+    <g fill="#fff" opacity="0.8"><ellipse cx="300" cy="210" rx="91" ry="29"/><ellipse cx="261" cy="192" rx="47" ry="31"/><ellipse cx="329" cy="184" rx="55" ry="39"/></g>
+    <g fill="#fff" opacity="0.8"><ellipse cx="1180" cy="160" rx="70" ry="22"/><ellipse cx="1150" cy="146" rx="36" ry="24"/><ellipse cx="1202" cy="140" rx="42" ry="30"/></g>
+    <g fill="#fff" opacity="0.6"><ellipse cx="760" cy="300" rx="56" ry="18"/><ellipse cx="736" cy="289" rx="29" ry="19"/><ellipse cx="778" cy="284" rx="34" ry="24"/></g>
+    <path d="M-40,610 C120,600 220,560 300,500 C350,462 380,420 420,414 C452,410 470,440 505,446 C540,452 560,420 590,424 C650,434 700,520 800,575 C860,605 940,612 1040,614 L1480,616 L1480,900 L-40,900 Z" fill="#e6d3d6"/>
+    <rect x="0" y="612" width="1440" height="288" fill="#cfe9e8"/><path d="M275,664 h62" stroke="#e8f6f5" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M241,885 h87" stroke="#e8f6f5" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M967,826 h56" stroke="#e8f6f5" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M192,881 h33" stroke="#e8f6f5" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M798,853 h107" stroke="#e8f6f5" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M4,860 h64" stroke="#e8f6f5" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M468,684 h70" stroke="#e8f6f5" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M62,643 h33" stroke="#e8f6f5" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M1330,636 h78" stroke="#e8f6f5" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M1405,742 h84" stroke="#e8f6f5" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M59,745 h86" stroke="#e8f6f5" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M1015,751 h74" stroke="#e8f6f5" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M472,744 h88" stroke="#e8f6f5" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M593,643 h83" stroke="#e8f6f5" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M1139,683 h53" stroke="#e8f6f5" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M1288,783 h45" stroke="#e8f6f5" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M681,888 h84" stroke="#e8f6f5" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M1039,729 h68" stroke="#e8f6f5" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M581,887 h94" stroke="#e8f6f5" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M805,649 h91" stroke="#e8f6f5" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M497,838 h83" stroke="#e8f6f5" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M1361,720 h76" stroke="#e8f6f5" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M1123,823 h41" stroke="#e8f6f5" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M898,687 h50" stroke="#e8f6f5" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M1066,833 h77" stroke="#e8f6f5" stroke-width="3" stroke-linecap="round" opacity=".7"/><path d="M1002,647 h90" stroke="#e8f6f5" stroke-width="3" stroke-linecap="round" opacity=".7"/>
+    <path d="M0,700 C200,690 420,712 640,700 C860,688 1100,712 1440,700 L1440,900 L0,900 Z" fill="#bfe2e1"/>
+    <path d="M0,840 C300,820 700,850 1440,825 L1440,900 L0,900 Z" fill="#f3e3d3"/>
+    <path d="M1251,900 C1233,732 1197,585 1139,480 L1146,480 C1206,585 1246,732 1269,900 Z" fill="#a9cfc9"/><path d="M1142,480 Q1039,428 936,556 Q1039,452 1142,486 Z" fill="#a9cfc9"/><path d="M1142,480 Q1062,398 982,507 Q1062,422 1142,486 Z" fill="#a9cfc9"/><path d="M1142,480 Q1106,380 1071,476 Q1106,404 1142,486 Z" fill="#a9cfc9"/><path d="M1142,480 Q1178,380 1214,476 Q1178,404 1142,486 Z" fill="#a9cfc9"/><path d="M1142,480 Q1228,403 1314,514 Q1228,427 1142,486 Z" fill="#a9cfc9"/><path d="M1142,480 Q1247,433 1352,565 Q1247,457 1142,486 Z" fill="#a9cfc9"/><path d="M1142,480 Q1238,465 1333,619 Q1238,489 1142,486 Z" fill="#a9cfc9"/><path d="M1142,480 Q1044,417 945,539 Q1044,441 1142,486 Z" fill="#a9cfc9"/>
+    <path d="M1361,900 C1348,772 1321,660 1277,580 L1284,580 C1330,660 1361,772 1379,900 Z" fill="#b7d8d2"/><path d="M1280,580 Q1202,536 1123,638 Q1202,560 1280,586 Z" fill="#b7d8d2"/><path d="M1280,580 Q1219,514 1158,601 Q1219,538 1280,586 Z" fill="#b7d8d2"/><path d="M1280,580 Q1253,500 1226,577 Q1253,524 1280,586 Z" fill="#b7d8d2"/><path d="M1280,580 Q1308,500 1335,577 Q1308,524 1280,586 Z" fill="#b7d8d2"/><path d="M1280,580 Q1346,517 1411,606 Q1346,541 1280,586 Z" fill="#b7d8d2"/><path d="M1280,580 Q1360,541 1440,645 Q1360,565 1280,586 Z" fill="#b7d8d2"/><path d="M1280,580 Q1353,565 1425,686 Q1353,589 1280,586 Z" fill="#b7d8d2"/><path d="M1280,580 Q1205,528 1130,625 Q1205,552 1280,586 Z" fill="#b7d8d2"/>
+    <path d="M81,900 C101,764 134,645 182,560 L189,560 C143,645 114,764 99,900 Z" fill="#b7d8d2"/><path d="M185,560 Q101,515 18,622 Q101,539 185,566 Z" fill="#b7d8d2"/><path d="M185,560 Q120,491 55,582 Q120,515 185,566 Z" fill="#b7d8d2"/><path d="M185,560 Q156,476 127,557 Q156,500 185,566 Z" fill="#b7d8d2"/><path d="M185,560 Q214,476 243,557 Q214,500 185,566 Z" fill="#b7d8d2"/><path d="M185,560 Q255,494 324,588 Q255,518 185,566 Z" fill="#b7d8d2"/><path d="M185,560 Q270,519 355,629 Q270,543 185,566 Z" fill="#b7d8d2"/><path d="M185,560 Q262,545 339,672 Q262,569 185,566 Z" fill="#b7d8d2"/><path d="M185,560 Q105,506 25,607 Q105,530 185,566 Z" fill="#b7d8d2"/>
+  </svg>
 </div>
 
+<canvas id="scene" aria-hidden="true"></canvas>
+
 <main>
-  <h1>amy world tour</h1>
-  <p class="tagline" style="text-align: justify; text-justify: inter-word;">Life's super fun when you believe the sky's the limit. In Honolulu until end of Nov: building in stealth, balancing tech job, surfing everyday, and creating content! Links below to learn about me. Pls reach out if you're in the tech community in Hawaii or a brand interested in collabs!</p>
-  <nav>
-    <a href="https://instagram.com/amyworldtour" target="_blank">Instagram</a>
-    <a href="https://www.tiktok.com/@amyworldtour" target="_blank">Tiktok</a>
-    <a href="https://amyworldtour.substack.com/" target="_blank">Substack</a>
-    <a href="mailto:hello@amyworldtour.com" target="_blank">Email</a>
+  <h1 class="rise">amy world tour</h1>
+  <p class="lede rise">every season, to the max</p>
+  <div class="rise">
+    <ol class="route" aria-label="The tour so far">
+      <li data-season="vancouver"><button type="button" aria-expanded="false" aria-controls="stop">Vancouver</button></li>
+      <li data-season="europe"><button type="button" aria-expanded="false" aria-controls="stop">Europe summer</button></li>
+      <li data-season="thailand"><button type="button" aria-expanded="false" aria-controls="stop">Thailand summer</button></li>
+      <li data-season="whistler"><button type="button" aria-expanded="false" aria-controls="stop">Whistler winter</button></li>
+      <li data-season="hawaii" class="on"><button type="button" aria-expanded="false" aria-controls="stop">Hawaii, now</button></li>
+    </ol>
+    <div class="stop" id="stop" aria-live="polite"><p></p></div>
+  </div>
+  <nav class="rise">
+    <p>insta: <a href="https://instagram.com/amyworldtour" target="_blank" rel="noopener">@amyworldtour</a></p>
+    <p>tiktok: <a href="https://www.tiktok.com/@amyworldtour" target="_blank" rel="noopener">@amyworldtour</a></p>
+    <p>substack: <a href="https://amyworldtour.substack.com/" target="_blank" rel="noopener">@amyworldtour</a></p>
+    <p>email: <a href="mailto:hello@amyworldtour.com" target="_blank" rel="noopener">hello@amyworldtour.com</a></p>
   </nav>
 </main>
 
-<script>
-/* Pointer parallax. Writes two unitless numbers (-1..1) to .field; the CSS
-   above turns them into px per bubble via --par. One style write per frame
-   for the whole field, and the rAF loop parks itself once it has settled. */
+<p class="hint" aria-hidden="true">tap a bubble</p>
+
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js" } }
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+
+const canvas = document.getElementById('scene');
+const still  = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const coarse = matchMedia('(pointer: coarse)').matches;
+
+requestAnimationFrame(() => document.body.classList.add('ready'));
+
+/* what I did at each stop, in my own words */
+const DID = {
+  vancouver: 'new grad cs, tb to signing bonuses, lived at ocean view english bay apartment, had a herman miller, also rough times which started the following life spiral',
+  europe:    '3 eras tours, luggage had ski gear (shoutout hintertux 365 day resort) and beachwear for super hot south of spain days',
+  thailand:  'working 7pm-3am remote hours, ate great food, beautiful islands, popped by china after to see extended fam and eat more great food which i miss everyday',
+  whistler:  'skied 114 days in a season of 180 skiable days, sleep work ski eat work, big mountain skiing progression goes crazy if u go everyday',
+  hawaii:    'pushing out 2-3 vids a day on insta and tiktok, poke and li hing and chicken rice broccoli diet',
+};
+
+/* seasons: the sky, globe and note replay the tour on a loop, resting
+   longest on now, so the page shows what the cities do without anyone
+   clicking. Hovering a stop previews it; clicking one holds it there until
+   it's clicked again (or Esc). */
 (function(){
-  var fine  = matchMedia('(hover: hover) and (pointer: fine)');
-  var still = matchMedia('(prefers-reduced-motion: reduce)');
-  if(!fine.matches || still.matches) return;
+  const stops = [...document.querySelectorAll('.route li')];
+  const panel = document.getElementById('stop');
+  const note  = panel.querySelector('p');
+  const hold  = { hawaii: 12000 };
+  let i = stops.length - 1, timer = 0, noteTimer = 0, pinned = -1, hover = -1;
 
-  var field = document.querySelector('.field');
-  var tx=0, ty=0, cx=0, cy=0, frame=0;
-
-  function move(e){
-    tx = (e.clientX / innerWidth  - .5) * 2;
-    ty = (e.clientY / innerHeight - .5) * 2;
-    if(!frame) frame = requestAnimationFrame(tick);
+  function setNote(text){
+    if(note.textContent === text && panel.classList.contains('open')) return;
+    clearTimeout(noteTimer);
+    const wasOpen = panel.classList.contains('open');
+    panel.classList.remove('open');
+    noteTimer = setTimeout(() => {
+      note.textContent = text;
+      panel.classList.toggle('open', !!text);
+    }, wasOpen ? 380 : 0);
   }
 
-  function tick(){
-    cx += (tx - cx) * .07;
-    cy += (ty - cy) * .07;
-    field.style.setProperty('--mx', cx.toFixed(4));
-    field.style.setProperty('--my', cy.toFixed(4));
-    frame = (Math.abs(tx-cx) > .0005 || Math.abs(ty-cy) > .0005)
-      ? requestAnimationFrame(tick) : 0;
+  function render(){
+    const k = hover >= 0 ? hover : pinned >= 0 ? pinned : i;
+    const s = stops[k].dataset.season;
+    if(s === 'hawaii') delete document.body.dataset.season;
+    else document.body.dataset.season = s;
+    stops.forEach((li, j) => {
+      li.classList.toggle('on', j === k);
+      li.firstElementChild.setAttribute('aria-expanded', j === pinned);
+    });
+    setNote(DID[s] || '');
+    document.dispatchEvent(new CustomEvent('season', { detail: s }));
   }
 
-  addEventListener('pointermove', move, {passive:true});
+  function schedule(){
+    clearTimeout(timer);
+    if(still || pinned >= 0 || hover >= 0) return;
+    timer = setTimeout(() => { i = (i + 1) % stops.length; render(); schedule(); },
+                       hold[stops[i].dataset.season] || 9000);
+  }
 
-  still.addEventListener('change', function(e){
-    if(!e.matches) return;
-    removeEventListener('pointermove', move);
-    cancelAnimationFrame(frame); frame = 0;
-    field.style.setProperty('--mx','0');
-    field.style.setProperty('--my','0');
+  stops.forEach((li, k) => {
+    const btn = li.firstElementChild;
+    btn.addEventListener('click', () => {
+      if(pinned === k){ pinned = -1; i = k; } else pinned = k;
+      render(); schedule();
+    });
+    btn.addEventListener('pointerenter', e => {
+      if(e.pointerType !== 'mouse') return;
+      hover = k; clearTimeout(timer); render();
+    });
+    btn.addEventListener('pointerleave', e => {
+      if(e.pointerType !== 'mouse') return;
+      hover = -1; render(); schedule();
+    });
   });
+  addEventListener('keydown', e => {
+    if(e.key === 'Escape' && pinned >= 0){ i = pinned; pinned = -1; render(); schedule(); }
+  });
+
+  render();
+  schedule();
 })();
+
+let renderer;
+try {
+  renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: 'high-performance' });
+} catch (e) {
+  canvas.remove();           // no WebGL: the wash + text still stand on their own
+  throw e;
+}
+renderer.setPixelRatio(Math.min(devicePixelRatio, coarse ? 1.5 : 2));
+renderer.setClearColor(0x000000, 0);
+
+const scene  = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(35, 1, 0.1, 100);
+camera.position.set(0, 0, 18);
+
+/* ---------------- soap film shader ----------------
+   Thin-film interference faked with a cosine palette driven by a slowly
+   swirling "thickness" field. Alpha is mostly Fresnel, so the middle of a
+   bubble stays clear and the rim carries the colour — like the real thing. */
+
+const NOISE = /* glsl */`
+  vec3 hash3(vec3 p){
+    p = vec3(dot(p,vec3(127.1,311.7,74.7)), dot(p,vec3(269.5,183.3,246.1)), dot(p,vec3(113.5,271.9,124.6)));
+    return -1.0 + 2.0*fract(sin(p)*43758.5453123);
+  }
+  float noise(vec3 p){
+    vec3 i = floor(p), f = fract(p);
+    vec3 u = f*f*(3.0-2.0*f);
+    return mix(mix(mix(dot(hash3(i+vec3(0,0,0)),f-vec3(0,0,0)), dot(hash3(i+vec3(1,0,0)),f-vec3(1,0,0)),u.x),
+                   mix(dot(hash3(i+vec3(0,1,0)),f-vec3(0,1,0)), dot(hash3(i+vec3(1,1,0)),f-vec3(1,1,0)),u.x),u.y),
+               mix(mix(dot(hash3(i+vec3(0,0,1)),f-vec3(0,0,1)), dot(hash3(i+vec3(1,0,1)),f-vec3(1,0,1)),u.x),
+                   mix(dot(hash3(i+vec3(0,1,1)),f-vec3(0,1,1)), dot(hash3(i+vec3(1,1,1)),f-vec3(1,1,1)),u.x),u.y),u.z);
+  }
+`;
+
+const vertexShader = /* glsl */`
+  uniform float uTime;
+  uniform float uSeed;
+  uniform float uWobble;
+  varying vec3 vN;
+  varying vec3 vView;
+  varying vec3 vLocal;
+  ${NOISE}
+  void main(){
+    vec3 p = position;
+    // gentle membrane wobble
+    float w = noise(p*1.4 + vec3(uSeed, uTime*0.35, uSeed*0.5));
+    p += normal * w * uWobble;
+    vLocal = position;
+    vec4 world = modelMatrix * vec4(p,1.0);
+    vN = normalize(mat3(modelMatrix) * normal);
+    vView = normalize(cameraPosition - world.xyz);
+    gl_Position = projectionMatrix * viewMatrix * world;
+  }
+`;
+
+const fragmentShader = /* glsl */`
+  uniform float uTime;
+  uniform float uSeed;
+  uniform float uHue;
+  uniform float uPop;
+  uniform float uAlpha;
+  varying vec3 vN;
+  varying vec3 vView;
+  varying vec3 vLocal;
+  ${NOISE}
+
+  vec3 film(float t){
+    // cosine palette tuned to soap-film pinks, lilacs, teals, golds
+    vec3 c = 0.5 + 0.5*cos(6.28318*(t + vec3(0.0, 0.33, 0.67) + uHue));
+    // pull greens toward lilac so it matches the old sprites
+    c.g *= 0.82; c.b = mix(c.b, 1.0, 0.18);
+    return c;
+  }
+
+  void main(){
+    vec3 N = normalize(vN);
+    vec3 V = normalize(vView);
+    if(!gl_FrontFacing) N = -N;
+    float ndv = clamp(abs(dot(N,V)), 0.0, 1.0);
+    float fres = pow(1.0 - ndv, 2.2);
+
+    // swirling thickness: gravity thins the top, noise stirs it
+    vec3 q = vLocal*1.3 + vec3(0.0, -uTime*0.08, uSeed);
+    float swirl = noise(q + noise(q*1.7 + uTime*0.05)*1.2);
+    float thick = 0.55*swirl - 0.18*vLocal.y + 0.9*(1.0-ndv);
+    vec3 col = film(thick);
+    col = mix(vec3(1.0), col, 0.62);                 // pastel, like the sprites
+
+    // two soft window reflections + a faint rim so it reads on a pale page
+    vec3 R = reflect(-V, N);
+    float k1 = pow(max(dot(R, normalize(vec3(-0.5, 0.7, 0.6))), 0.0), 60.0);
+    float k2 = pow(max(dot(R, normalize(vec3( 0.6,-0.5, 0.6))), 0.0), 18.0) * 0.35;
+    float rim = smoothstep(0.82, 0.98, 1.0-ndv);
+    col = mix(col, vec3(0.62,0.58,0.74), rim*0.35);
+    col += (k1 + k2);
+
+    float a = 0.07 + 0.62*fres + 0.8*k1 + k2;
+    a *= gl_FrontFacing ? 1.0 : 0.45;
+
+    // popping: the film tears open from a random spot
+    if(uPop > 0.0){
+      float tear = noise(vLocal*3.0 + uSeed*7.0)*0.5 + 0.5;
+      float d = distance(normalize(vLocal), normalize(vec3(sin(uSeed*9.1), cos(uSeed*5.3), 0.8)));
+      if(d*0.6 + tear*0.5 < uPop*1.6) discard;
+      a *= 1.0 - uPop*0.6;
+    }
+
+    gl_FragColor = vec4(col, a * uAlpha);
+  }
+`;
+
+const geo = new THREE.SphereGeometry(1, 96, 64);
+
+/* ---------------- bubbles ---------------- */
+
+const COUNT = coarse ? 8 : 11;
+const bubbles = [];
+let halfW = 10, halfH = 6;     // visible half-extents at z = 0, set on resize
+
+function rand(a, b){ return a + Math.random()*(b-a); }
+
+function makeBubble(i){
+  const mat = new THREE.ShaderMaterial({
+    vertexShader, fragmentShader,
+    uniforms: {
+      uTime:   { value: 0 },
+      uSeed:   { value: Math.random()*100 },
+      uHue:    { value: rand(-0.05, 0.2) },
+      uPop:    { value: 0 },
+      uAlpha:  { value: 1 },
+      uWobble: { value: 0.03 },
+    },
+    transparent: true,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+  });
+  const mesh = new THREE.Mesh(geo, mat);
+  scene.add(mesh);
+  const b = { mesh, mat, vel: new THREE.Vector3(), r: 1, grow: 0, popping: -1, phase: Math.random()*6.28 };
+  spawn(b, true, i);
+  bubbles.push(b);
+  return b;
+}
+
+function spawn(b, initial, i = 0){
+  // a mix of big lazy ones and little quick ones
+  const big = Math.random() < 0.25;
+  b.r = big ? rand(1.2, 2.0) : rand(0.35, 1.0);
+  const z = rand(-6, 2.5);
+  const scaleAtZ = (camera.position.z - z) / camera.position.z;
+  const x = rand(-halfW, halfW) * scaleAtZ;
+  const y = initial ? rand(-halfH, halfH) * scaleAtZ : -halfH*scaleAtZ - b.r - rand(0, 2);
+  b.mesh.position.set(x, y, z);
+  for(let tries = 0; tries < 12 && keepOutHit(b.mesh.position, b.r); tries++){
+    b.mesh.position.x = rand(-halfW, halfW) * scaleAtZ;
+  }
+  b.vel.set(rand(-0.15, 0.15), rand(0.12, 0.35) / Math.sqrt(b.r), 0);
+  b.grow = initial ? -i * 0.08 : 0;    // staggered inflate on load
+  b.popping = -1;
+  b.mat.uniforms.uPop.value = 0;
+  b.mat.uniforms.uAlpha.value = 1;
+  b.mat.uniforms.uSeed.value = Math.random()*100;
+  b.mat.uniforms.uWobble.value = 0.02 + 0.02*b.r;
+  b.mesh.scale.setScalar(0.0001);
+}
+
+/* ---------------- droplets when a bubble pops ---------------- */
+
+const DROPS = 260;
+const dropGeo = new THREE.BufferGeometry();
+const dropPos = new Float32Array(DROPS*3);
+const dropVel = new Float32Array(DROPS*3);
+const dropLife = new Float32Array(DROPS);
+dropGeo.setAttribute('position', new THREE.BufferAttribute(dropPos, 3));
+dropGeo.setAttribute('life', new THREE.BufferAttribute(dropLife, 1));
+const dropMat = new THREE.ShaderMaterial({
+  transparent: true, depthWrite: false,
+  uniforms: { uScale: { value: 1 } },
+  vertexShader: /* glsl */`
+    attribute float life;
+    uniform float uScale;
+    varying float vLife;
+    void main(){
+      vLife = life;
+      vec4 mv = modelViewMatrix * vec4(position,1.0);
+      gl_PointSize = uScale * (2.0 + 4.0*life) * (18.0 / -mv.z);
+      gl_Position = projectionMatrix * mv;
+    }`,
+  fragmentShader: /* glsl */`
+    varying float vLife;
+    void main(){
+      if(vLife <= 0.0) discard;
+      float d = length(gl_PointCoord - 0.5);
+      if(d > 0.5) discard;
+      gl_FragColor = vec4(vec3(0.6,0.62,0.78), smoothstep(0.5, 0.15, d) * vLife * 0.75);
+    }`,
+});
+scene.add(new THREE.Points(dropGeo, dropMat));
+let dropCursor = 0;
+
+function burst(b){
+  const p = b.mesh.position;
+  const n = Math.round(14 + b.r*18);
+  for(let k = 0; k < n; k++){
+    const i = dropCursor = (dropCursor + 1) % DROPS;
+    const dir = new THREE.Vector3(rand(-1,1), rand(-1,1), rand(-1,1)).normalize();
+    dropPos[i*3]   = p.x + dir.x*b.mesh.scale.x;
+    dropPos[i*3+1] = p.y + dir.y*b.mesh.scale.x;
+    dropPos[i*3+2] = p.z + dir.z*b.mesh.scale.x;
+    const s = rand(1.5, 4.5);
+    dropVel[i*3] = dir.x*s; dropVel[i*3+1] = dir.y*s + 1; dropVel[i*3+2] = dir.z*s;
+    dropLife[i] = rand(0.7, 1);
+  }
+}
+
+/* pop sound, synthesized so there's nothing to download: a quick falling
+   "bloop" plus a tiny burst of filtered noise for the snap. Bigger bubble,
+   lower pitch. AudioContext is created on the first click (autoplay rules). */
+let actx, noiseBuf;
+function popSound(r){
+  try{
+    actx ||= new (window.AudioContext || window.webkitAudioContext)();
+    if(actx.state === 'suspended') actx.resume();
+    const t = actx.currentTime;
+    const out = actx.createGain();
+    out.gain.value = 0.5;
+    out.connect(actx.destination);
+
+    const f0 = (1100 / Math.sqrt(r)) * rand(0.85, 1.15);
+    const osc = actx.createOscillator();
+    const og = actx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(f0, t);
+    osc.frequency.exponentialRampToValueAtTime(f0 * 0.25, t + 0.07);
+    og.gain.setValueAtTime(0.0001, t);
+    og.gain.exponentialRampToValueAtTime(0.6, t + 0.004);
+    og.gain.exponentialRampToValueAtTime(0.0001, t + 0.09);
+    osc.connect(og).connect(out);
+    osc.start(t); osc.stop(t + 0.1);
+
+    if(!noiseBuf){
+      noiseBuf = actx.createBuffer(1, actx.sampleRate * 0.04, actx.sampleRate);
+      const d = noiseBuf.getChannelData(0);
+      for(let i = 0; i < d.length; i++) d[i] = Math.random()*2 - 1;
+    }
+    const n = actx.createBufferSource();
+    n.buffer = noiseBuf;
+    const hp = actx.createBiquadFilter();
+    hp.type = 'highpass'; hp.frequency.value = 2200;
+    const ng = actx.createGain();
+    ng.gain.setValueAtTime(0.35, t);
+    ng.gain.exponentialRampToValueAtTime(0.0001, t + 0.03);
+    n.connect(hp).connect(ng).connect(out);
+    n.start(t);
+  }catch(e){ /* no audio is fine */ }
+}
+
+function pop(b){
+  if(b.popping >= 0) return;
+  b.popping = 0;
+  burst(b);
+  popSound(b.r);
+}
+
+/* ---------------- atmosphere ----------------
+   One full-screen shader painted under everything else in the WebGL scene,
+   holding a mood for each place. The current season's weight eases to 1 and
+   the rest to 0, so they crossfade with the sky.
+     vancouver: fine rain + drifting fog     europe: golden sea glitter + light rays
+     thailand:  emerald caustics + warm rays whistler: falling snow
+     hawaii:    turquoise caustics + sparkle */
+
+const SEASONS = ['vancouver', 'europe', 'thailand', 'whistler', 'hawaii'];
+const moodW = [0, 0, 0, 0, 1];
+let moodTarget = 4;
+document.addEventListener('season', e => { moodTarget = Math.max(0, SEASONS.indexOf(e.detail)); });
+
+const mood = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderMaterial({
+  transparent: true, depthTest: false, depthWrite: false,
+  uniforms: { uTime: { value: 0 }, uAspect: { value: 1 }, uW: { value: moodW } },
+  vertexShader: /* glsl */`
+    varying vec2 vUv;
+    void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`,
+  fragmentShader: /* glsl */`
+    uniform float uTime, uAspect;
+    uniform float uW[5];
+    varying vec2 vUv;
+    ${NOISE}
+    float h21(vec2 p){ return fract(sin(dot(p, vec2(41.3, 289.1))) * 43758.5453); }
+
+    // classic tileable water caustic, returns bright light-web lines
+    float caustic(vec2 uv, float t){
+      vec2 p = mod(uv * 6.28318, 6.28318) - 250.0;
+      vec2 i = p; float c = 1.0;
+      for(int n = 0; n < 4; n++){
+        float tt = t * (1.0 - (3.5 / float(n + 1)));
+        i = p + vec2(cos(tt - i.x) + sin(tt + i.y), sin(tt - i.y) + cos(tt + i.x));
+        c += 1.0 / length(vec2(p.x / (sin(i.x + tt) / 0.005), p.y / (cos(i.y + tt) / 0.005)));
+      }
+      c /= 4.0;
+      c = 1.17 - pow(c, 1.4);
+      return clamp(pow(abs(c), 8.0), 0.0, 1.0);
+    }
+
+    float snow(vec2 uv, float t){
+      float acc = 0.0;
+      for(int L = 0; L < 3; L++){
+        float fl = float(L);
+        float sc = 7.0 + fl * 6.0;
+        vec2 q = vec2(uv.x * uAspect, uv.y) * sc;
+        q.y += t * (0.5 + fl * 0.25);
+        q.x += sin(t * 0.4 + q.y * 0.35 + fl) * 0.35;
+        vec2 cell = floor(q), f = fract(q) - 0.5;
+        float r = h21(cell + fl * 17.0);
+        vec2 off = vec2(h21(cell + 3.1), h21(cell + 7.7)) - 0.5;
+        float d = length(f - off * 0.6);
+        acc += step(0.45, r) * smoothstep(0.075 - fl * 0.015, 0.0, d) * (1.0 - fl * 0.25);
+      }
+      return acc;
+    }
+
+    float rain(vec2 uv, float t){
+      vec2 q = vec2(uv.x * uAspect * 70.0, uv.y * 4.0);
+      q.x += q.y * 1.6;                       // slant
+      q.y += t * 3.2;
+      vec2 cell = floor(q), f = fract(q);
+      float r = h21(vec2(cell.x, cell.y * 1.7));
+      float streak = smoothstep(0.09, 0.0, abs(f.x - 0.5)) * smoothstep(0.0, 0.25, f.y) * smoothstep(0.6, 0.3, f.y);
+      return streak * step(0.8, r);
+    }
+
+    float rays(vec2 uv, vec2 src, float t){
+      vec2 d = vec2((uv.x - src.x) * uAspect, uv.y - src.y);
+      float a = atan(d.x, -d.y);
+      float r = 0.5 + 0.5 * sin(a * 11.0 + t * 0.15 + noise(vec3(a * 3.0, t * 0.1, 0.0)) * 3.0);
+      return pow(r, 5.0) * smoothstep(1.3, 0.0, length(d));
+    }
+
+    void main(){
+      vec2 uv = vUv;
+      float t = uTime;
+      vec3 col = vec3(0.0); float a = 0.0;
+      #define ADD(c, al) { float _a = (al); col += (c) * _a; a += _a; }
+
+      float sea = smoothstep(0.32, 0.27, uv.y);          // the illustrations' sea is the bottom third
+      vec2 cu = vec2(uv.x * uAspect, uv.y) * 1.1;
+
+      // hawaii
+      if(uW[4] > 0.001){
+        float c = caustic(cu + vec2(0.0, t * 0.01), t * 0.35);
+        ADD(vec3(1.0), uW[4] * sea * 0.55 * c);
+        float sp = smoothstep(0.66, 0.8, noise(vec3(uv.x * uAspect * 14.0, uv.y * 140.0, t * 1.5)) + 0.5);
+        ADD(vec3(1.0), uW[4] * sea * sp * 0.7);
+      }
+      // thailand
+      if(uW[2] > 0.001){
+        float c = caustic(cu * 0.9 + vec2(t * 0.008, 0.0), t * 0.28);
+        ADD(vec3(1.0), uW[2] * sea * 0.5 * c);
+        ADD(vec3(1.0, 0.68, 0.4), uW[2] * rays(uv, vec2(0.75, 1.15), t) * 0.22);
+      }
+      // europe
+      if(uW[1] > 0.001){
+        float g = noise(vec3(uv.x * uAspect * 16.0, uv.y * 150.0, t * 1.2)) + 0.5;
+        float glit = smoothstep(0.66, 0.82, g) * sea;
+        ADD(vec3(0.95, 0.7, 0.3), uW[1] * glit * 0.45);
+                ADD(vec3(1.0, 0.78, 0.45), uW[1] * rays(uv, vec2(0.85, 1.2), t) * 0.26);
+      }
+      // whistler
+      if(uW[3] > 0.001){
+        ADD(vec3(0.55, 0.64, 0.8), uW[3] * min(1.0, snow(uv, t)) * 0.6);
+              }
+      // vancouver
+      if(uW[0] > 0.001){
+        ADD(vec3(0.4, 0.47, 0.56), uW[0] * rain(uv, t) * 0.45);
+        float fog = noise(vec3(uv.x * uAspect * 1.6 - t * 0.04, uv.y * 2.5, t * 0.03)) + 0.5;
+        ADD(vec3(0.72, 0.76, 0.8), uW[0] * smoothstep(0.35, 0.8, fog) * smoothstep(0.85, 0.2, uv.y) * 0.3);
+      }
+
+      if(a <= 0.001) discard;
+      gl_FragColor = vec4(col / a, min(a, 0.85));
+    }`,
+}));
+mood.frustumCulled = false;
+mood.renderOrder = -10;
+scene.add(mood);
+
+/* ---------------- globe ----------------
+   A dotted Earth behind the bubbles. Land dots come from land.bin (lat/lon
+   pairs, int16, hundredths of a degree, generated from Natural Earth 110m).
+   The tour is drawn as a dotted flight path that traces itself in on load,
+   and the globe turns to whichever season the sky is showing. */
+
+const PLACES = {
+  vancouver: [49.28, -123.12],
+  europe:    [47.07,  11.68],   // Hintertux
+  thailand:  [13.75, 100.50],
+  whistler:  [50.12, -122.95],
+  hawaii:    [21.31, -157.86],
+};
+const ORDER = ['vancouver', 'europe', 'thailand', 'whistler', 'hawaii'];
+
+function ll(lat, lon, r = 1){
+  const p = THREE.MathUtils.degToRad(lat), l = THREE.MathUtils.degToRad(lon);
+  return new THREE.Vector3(Math.cos(p)*Math.sin(l), Math.sin(p), Math.cos(p)*Math.cos(l)).multiplyScalar(r);
+}
+
+const globe = new THREE.Group();
+globe.rotation.order = 'XYZ';
+scene.add(globe);
+
+const globeMat = new THREE.ShaderMaterial({
+  transparent: true, depthWrite: false, depthTest: false,
+  uniforms: { uScale: { value: 1 }, uProgress: { value: 0 }, uTime: { value: 0 }, uActive: { value: 4 } },
+  vertexShader: /* glsl */`
+    attribute float aKind;   // 0 land, 1 path, 2 place
+    attribute float aT;      // path: 0..1 along the route; place: its index
+    uniform float uScale, uProgress, uTime, uActive;
+    varying float vA;
+    varying vec3 vC;
+    void main(){
+      vec4 world = modelMatrix * vec4(position, 1.0);
+      vec3 n = normalize(mat3(modelMatrix) * position);
+      float facing = dot(n, normalize(cameraPosition - world.xyz));
+      float front = smoothstep(-0.05, 0.4, facing);
+      vec4 mv = viewMatrix * world;
+      float size = 2.0;
+      if(aKind < 0.5){
+        vC = vec3(0.42, 0.45, 0.52); vA = 0.5 * front; size = 2.6;
+      } else if(aKind < 1.5){
+        vC = vec3(0.86, 0.47, 0.6);  vA = 0.7 * front * step(aT, uProgress);
+        size = 2.4;
+      } else {
+        bool on = abs(aT - uActive) < 0.5;
+        vC = on ? vec3(0.93, 0.36, 0.55) : vec3(0.86, 0.47, 0.6);
+        vA = front * (on ? 1.0 : 0.75);
+        size = on ? 9.0 + 2.5*sin(uTime*3.0) : 6.0;
+      }
+      gl_PointSize = size * uScale * (20.0 / -mv.z);
+      gl_Position = projectionMatrix * mv;
+    }`,
+  fragmentShader: /* glsl */`
+    varying float vA;
+    varying vec3 vC;
+    void main(){
+      float d = length(gl_PointCoord - 0.5);
+      if(d > 0.5 || vA <= 0.0) discard;
+      gl_FragColor = vec4(vC, vA * smoothstep(0.5, 0.3, d));
+    }`,
+});
+
+// soft body + rim so the globe reads as a sphere even when facing open ocean
+const shell = new THREE.Mesh(new THREE.SphereGeometry(0.995, 64, 48), new THREE.ShaderMaterial({
+  transparent: true, depthWrite: false, depthTest: false,
+  vertexShader: /* glsl */`
+    varying float vF;
+    void main(){
+      vec4 world = modelMatrix * vec4(position, 1.0);
+      vec3 n = normalize(mat3(modelMatrix) * normal);
+      vF = 1.0 - abs(dot(n, normalize(cameraPosition - world.xyz)));
+      gl_Position = projectionMatrix * viewMatrix * world;
+    }`,
+  fragmentShader: /* glsl */`
+    varying float vF;
+    void main(){
+      float a = 0.05 + 0.22 * pow(vF, 3.0);
+      gl_FragColor = vec4(vec3(1.0), a);
+    }`,
+}));
+shell.renderOrder = -2;
+globe.add(shell);
+
+const globeTarget = new THREE.Euler(0, 0, 0, 'XYZ');
+function aim(season){
+  const [lat, lon] = PLACES[season] || PLACES.hawaii;
+  globeTarget.x = THREE.MathUtils.degToRad(lat) * 0.7;
+  globeTarget.y = -THREE.MathUtils.degToRad(lon);
+  globeMat.uniforms.uActive.value = ORDER.indexOf(season);
+}
+aim('hawaii');
+globe.rotation.set(globeTarget.x, globeTarget.y + 0.9, 0);   // swings in on load
+document.addEventListener('season', e => aim(e.detail));
+
+fetch('land.bin').then(r => r.arrayBuffer()).then(buf => {
+  const raw = new Int16Array(buf);
+  const pos = [], kind = [], t = [];
+  for(let i = 0; i < raw.length; i += 2){
+    const v = ll(raw[i]/100, raw[i+1]/100);
+    pos.push(v.x, v.y, v.z); kind.push(0); t.push(0);
+  }
+  // route: great-circle hops lifted into a little arc, one dot every ~0.7 degrees
+  const hops = [];
+  let total = 0;
+  for(let h = 0; h < ORDER.length - 1; h++){
+    const a = ll(...PLACES[ORDER[h]]), b = ll(...PLACES[ORDER[h+1]]);
+    const ang = a.angleTo(b);
+    hops.push([a, b, ang]); total += ang;
+  }
+  let run = 0;
+  for(const [a, b, ang] of hops){
+    const n = Math.max(2, Math.ceil(ang / 0.007));
+    for(let k = 0; k <= n; k++){
+      const f = k / n;
+      const v = a.clone().lerp(b, f).normalize().multiplyScalar(1 + Math.sin(Math.PI*f) * Math.min(0.18, ang*0.12));
+      pos.push(v.x, v.y, v.z); kind.push(1); t.push((run + ang*f) / total);
+    }
+    run += ang;
+  }
+  ORDER.forEach((s, k) => {
+    const v = ll(...PLACES[s], 1.01);
+    pos.push(v.x, v.y, v.z); kind.push(2); t.push(k);
+  });
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('aKind', new THREE.Float32BufferAttribute(kind, 1));
+  g.setAttribute('aT', new THREE.Float32BufferAttribute(t, 1));
+  const pts = new THREE.Points(g, globeMat);
+  pts.renderOrder = -1;
+  globe.add(pts);
+  globeBorn = clock.elapsedTime;
+}).catch(() => {});
+let globeBorn = -1;
+
+function placeGlobe(){
+  // sits low and large: the top of the globe rises behind the text and the
+  // current place lands in the open space under the links
+  const zG = -4;
+  const s = (camera.position.z - zG) / camera.position.z;
+  const R = Math.min(halfW * 0.85, halfH * 0.9) * s;
+  globe.scale.setScalar(R);
+  globe.position.set(0, -halfH * s * 0.62, zG);
+  globeMat.uniforms.uScale.value = renderer.getPixelRatio() * (innerHeight / 900);
+}
+
+/* ---------------- pointer ---------------- */
+
+const ray = new THREE.Raycaster();
+const ndc = new THREE.Vector2(9, 9);
+const pointerWorld = new THREE.Vector3(1e3, 1e3, 0);
+const plane = new THREE.Plane(new THREE.Vector3(0,0,1), 0);
+let pointerActive = false;
+
+function setPointer(e){
+  ndc.set((e.clientX/innerWidth)*2 - 1, -(e.clientY/innerHeight)*2 + 1);
+  ray.setFromCamera(ndc, camera);
+  ray.ray.intersectPlane(plane, pointerWorld);
+  pointerActive = true;
+}
+
+function hit(){
+  ray.setFromCamera(ndc, camera);
+  // nearest bubble whose sphere the ray passes through
+  let best = null, bestT = Infinity;
+  const sph = new THREE.Sphere();
+  const at = new THREE.Vector3();
+  for(const b of bubbles){
+    if(b.popping >= 0 || b.grow < 0.6) continue;
+    sph.set(b.mesh.position, b.mesh.scale.x);
+    if(ray.ray.intersectSphere(sph, at)){
+      const t = at.distanceTo(ray.ray.origin);
+      if(t < bestT){ bestT = t; best = b; }
+    }
+  }
+  return best;
+}
+
+addEventListener('pointermove', e => {
+  setPointer(e);
+  if(!coarse) canvas.classList.toggle('hot', !!hit());
+}, { passive: true });
+addEventListener('pointerleave', () => { pointerActive = false; pointerWorld.set(1e3,1e3,0); });
+
+canvas.addEventListener('pointerdown', e => {
+  setPointer(e);
+  const b = hit();
+  if(b){ pop(b); hint.classList.remove('on'); hinted = true; }
+});
+
+const hint = document.querySelector('.hint');
+let hinted = false;
+if(!still) setTimeout(() => { if(!hinted) hint.classList.add('on'); }, 4500);
+
+/* ---------------- loop ---------------- */
+
+function resize(){
+  const w = innerWidth, h = innerHeight;
+  renderer.setSize(w, h, false);
+  camera.aspect = w / h;
+  // pull the camera back on narrow screens so big bubbles don't swallow the text
+  camera.position.z = w < 700 ? 24 : 18;
+  camera.updateProjectionMatrix();
+  halfH = Math.tan(THREE.MathUtils.degToRad(camera.fov/2)) * camera.position.z;
+  halfW = halfH * camera.aspect;
+  dropMat.uniforms.uScale.value = renderer.getPixelRatio() * (h / 900);
+  placeGlobe();
+  mood.material.uniforms.uAspect.value = w / h;
+}
+addEventListener('resize', resize);
+resize();
+
+// screen rect covering the small text (tagline down to contacts), refreshed
+// as layout settles and on resize
+let keepOut = null;
+function measureKeepOut(){
+  const els = ['.lede', '.route', '.stop', 'nav'].map(q => document.querySelector(q)).filter(Boolean);
+  const r = els.map(e => e.getBoundingClientRect());
+  keepOut = {
+    left:   Math.min(...r.map(x => x.left)),
+    right:  Math.max(...r.map(x => x.right)),
+    top:    Math.min(...r.map(x => x.top)),
+    bottom: Math.max(...r.map(x => x.bottom)),
+  };
+}
+measureKeepOut();
+addEventListener('resize', measureKeepOut);
+document.fonts?.ready.then(measureKeepOut);
+setTimeout(measureKeepOut, 1800);       // after the entrance animation lands
+
+// how far (px) a bubble's on-screen circle reaches into the keep-out block;
+// returns [overlap, dirX, dirY] with dir in screen space, or null if clear
+function keepOutHit(pos, radius){
+  if(!keepOut) return null;
+  const dist = camera.position.z - pos.z;
+  const pxPerWorld = innerHeight / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * dist);
+  _kv.copy(pos).project(camera);
+  const cx = (_kv.x + 1) / 2 * innerWidth, cy = (1 - _kv.y) / 2 * innerHeight;
+  const rpx = radius * pxPerWorld + 14;
+  const nx = Math.max(keepOut.left, Math.min(cx, keepOut.right));
+  const ny = Math.max(keepOut.top,  Math.min(cy, keepOut.bottom));
+  let dx = cx - nx, dy = cy - ny, d = Math.hypot(dx, dy);
+  if(d >= rpx) return null;
+  if(d < 0.5){ dx = (cx - keepOut.left < keepOut.right - cx) ? -1 : 1; dy = 0; d = 1; return [rpx + Math.min(cx - keepOut.left, keepOut.right - cx), dx, 0, pxPerWorld]; }
+  return [rpx - d, dx / d, dy / d, pxPerWorld];
+}
+const _kv = new THREE.Vector3();
+
+for(let i = 0; i < COUNT; i++) makeBubble(i);
+
+const clock = new THREE.Clock();
+const tmp = new THREE.Vector3();
+
+function tick(){
+  const dt = Math.min(clock.getDelta(), 1/20);
+  const t = clock.elapsedTime;
+
+  // atmosphere: crossfade toward the current place
+  if(!still) mood.material.uniforms.uTime.value = t;
+  for(let k = 0; k < 5; k++){
+    const goal = k === moodTarget ? 1 : 0;
+    moodW[k] += (goal - moodW[k]) * (1 - Math.exp(-dt * 1.2));
+  }
+
+  // globe eases toward the current place, with a slow idle sway
+  globeMat.uniforms.uTime.value = t;
+  if(globeBorn >= 0) globeMat.uniforms.uProgress.value = still ? 1 : Math.min(1, (t - globeBorn) / 4.5);
+  const sway = still ? 0 : Math.sin(t * 0.12) * 0.06;
+  let dy = (globeTarget.y + sway) - globe.rotation.y;
+  dy = Math.atan2(Math.sin(dy), Math.cos(dy));          // shortest way round
+  const ease = 1 - Math.exp(-dt * 1.6);
+  globe.rotation.y += dy * ease;
+  globe.rotation.x += (globeTarget.x - globe.rotation.x) * ease;
+
+  for(const b of bubbles){
+    const u = b.mat.uniforms;
+    u.uTime.value = t;
+    const pos = b.mesh.position;
+
+    // inflate
+    if(b.grow < 1){
+      b.grow = Math.min(1, b.grow + dt*0.9);
+      const g = Math.max(0, b.grow);
+      const e = 1 - Math.pow(1 - g, 3) + Math.sin(g*Math.PI)*0.06;  // tiny overshoot
+      b.mesh.scale.setScalar(Math.max(0.0001, b.r * e));
+    }
+
+    // popping
+    if(b.popping >= 0){
+      b.popping += dt * 3.2;
+      u.uPop.value = Math.min(1, b.popping);
+      b.mesh.scale.setScalar(b.r * (1 + b.popping*0.12));
+      if(b.popping >= 1){ spawn(b, false); b.grow = 0; }
+      continue;
+    }
+
+    if(still) continue;
+
+    // drift up with a lazy sway
+    const sway = Math.sin(t*0.4 + b.phase) * 0.12;
+    pos.x += (b.vel.x + sway) * dt;
+    pos.y += b.vel.y * dt;
+
+    // keep clear of the small text: flow around it, and get out fast if inside
+    const hitK = keepOutHit(pos, b.mesh.scale.x);
+    if(hitK){
+      const [over, ux, uy, ppw] = hitK;
+      const step = Math.min(over, Math.max(over * dt * 4, 420 * dt)) / ppw;
+      pos.x += ux * step;
+      pos.y -= uy * step;
+    }
+
+    // pointer breeze: push bubbles near the cursor away
+    if(pointerActive){
+      tmp.set(pos.x - pointerWorld.x, pos.y - pointerWorld.y, 0);
+      const d = tmp.length();
+      const reach = b.r + 2.2;
+      if(d < reach && d > 0.001){
+        const f = (1 - d/reach) * 4.5 / b.r;
+        pos.x += tmp.x/d * f * dt;
+        pos.y += tmp.y/d * f * dt;
+      }
+    }
+
+    b.mesh.rotation.y += dt * 0.08;
+    b.mesh.rotation.z = Math.sin(t*0.3 + b.phase) * 0.15;
+
+    // float off the top -> respawn below
+    const scaleAtZ = (camera.position.z - pos.z) / camera.position.z;
+    if(pos.y - b.r > halfH*scaleAtZ + 0.5) spawn(b, false);
+    if(Math.abs(pos.x) > halfW*scaleAtZ + b.r + 1) pos.x = -Math.sign(pos.x) * (halfW*scaleAtZ + b.r);
+  }
+
+  // droplets
+  for(let i = 0; i < DROPS; i++){
+    if(dropLife[i] <= 0) continue;
+    dropVel[i*3+1] -= 9 * dt;
+    dropPos[i*3]   += dropVel[i*3]   * dt;
+    dropPos[i*3+1] += dropVel[i*3+1] * dt;
+    dropPos[i*3+2] += dropVel[i*3+2] * dt;
+    dropLife[i] -= dt * 1.6;
+  }
+  dropGeo.attributes.position.needsUpdate = true;
+  dropGeo.attributes.life.needsUpdate = true;
+
+  // far bubbles first so the blending stacks correctly
+  renderer.render(scene, camera);
+}
+
+renderer.setAnimationLoop(tick);
+document.addEventListener('visibilitychange', () => {
+  renderer.setAnimationLoop(document.hidden ? null : tick);
+  if(!document.hidden) clock.getDelta();
+});
 </script>
 
 </body>
